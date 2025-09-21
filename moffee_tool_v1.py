@@ -6,6 +6,7 @@ from moffee.compositor import composite, PageOption
 from moffee.markdown import md
 from moffee.utils.md_helper import extract_title
 import base64
+import json
 
 
 # 定义主题
@@ -872,59 +873,204 @@ def main():
     )
     
     st.title("AI PPT Generator 📊")
-    st.markdown("将自然语言转换为专业的演示文稿")
     
-    # 用户输入
-    col1, col2 = st.columns([3, 1])
+    # 创建标签页
+    tab1, tab2 = st.tabs(["演示文稿生成", "模板编辑器"])
     
-    with col1:
-        user_input = st.text_area(
-            "请输入演示文稿主题和内容要求:",
-            height=150,
-            placeholder="例如：请为我生成一个关于人工智能发展趋势的PPT，包含5页幻灯片..."
-        )
+    with tab1:
+        st.markdown("将自然语言转换为专业的演示文稿")
+        
+        # 用户输入
+        col1, col2 = st.columns([3, 1])
+        
+        with col1:
+            user_input = st.text_area(
+                "请输入演示文稿主题和内容要求:",
+                height=150,
+                placeholder="例如：请为我生成一个关于人工智能发展趋势的PPT，包含5页幻灯片..."
+            )
+        
+        with col2:
+            num_slides = st.number_input("幻灯片页数", min_value=3, max_value=20, value=5)
+            # 主题选择
+            theme_options = {k: v["name"] for k, v in THEMES.items()}
+            selected_theme_key = st.selectbox(
+                "选择主题", 
+                options=list(theme_options.keys()),
+                format_func=lambda x: theme_options[x],
+                index=0
+            )
+            layout_style = st.selectbox("布局风格", ["默认", "居中"])
+        
+        # 生成按钮
+        if st.button("生成演示文稿", type="primary"):
+            if user_input:
+                with st.spinner("正在生成演示文稿..."):
+                    # 生成内容
+                    markdown_content = generate_presentation_content(user_input, num_slides)
+                    
+                    # 渲染为HTML，使用选定的主题
+                    html_content = render_jinja2(markdown_content, selected_theme_key)
+                    
+                    # 显示结果
+                    st.success("演示文稿生成成功！")
+                    
+                    # 使用组件显示HTML
+                    import streamlit.components.v1 as components
+                    components.html(html_content, height=700, scrolling=True)
+                    
+                    # 提供下载选项
+                    st.download_button(
+                        label="下载HTML文件",
+                        data=html_content,
+                        file_name="presentation.html",
+                        mime="text/html"
+                    )
+                    
+                    # 提供PDF转换提示
+                    st.info("提示：在演示文稿页面中，您可以点击右下角的“Save as PDF”按钮将演示文稿保存为PDF文件。")
+            else:
+                st.warning("请输入演示文稿主题和内容要求")
     
-    with col2:
-        num_slides = st.number_input("幻灯片页数", min_value=3, max_value=20, value=5)
-        # 主题选择
-        theme_options = {k: v["name"] for k, v in THEMES.items()}
-        selected_theme_key = st.selectbox(
-            "选择主题", 
-            options=list(theme_options.keys()),
-            format_func=lambda x: theme_options[x],
-            index=0
-        )
-        layout_style = st.selectbox("布局风格", ["默认", "居中"])
-    
-    # 生成按钮
-    if st.button("生成演示文稿", type="primary"):
-        if user_input:
-            with st.spinner("正在生成演示文稿..."):
-                # 生成内容
-                markdown_content = generate_presentation_content(user_input, num_slides)
+    with tab2:
+        st.header("模板编辑器")
+        st.markdown("创建和编辑自定义主题模板")
+        
+        # 模板编辑功能
+        st.subheader("创建新主题")
+        
+        # 获取现有主题列表
+        existing_themes = list(THEMES.keys())
+        selected_theme = st.selectbox("选择要编辑的主题", existing_themes, key="edit_theme")
+        
+        # 加载选中的主题数据
+        current_theme = THEMES[selected_theme]
+        
+        # 显示主题预览
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            theme_name = st.text_input("主题名称", current_theme["name"])
+            
+            st.markdown("### 颜色设置")
+            colors = current_theme["colors"]
+            background_color = st.color_picker("背景色", colors["background"])
+            text_color = st.color_picker("文字颜色", colors["text"])
+            heading1_color = st.color_picker("一级标题颜色", colors["heading1"])
+            heading2_color = st.color_picker("二级标题颜色", colors["heading2"])
+            heading3_color = st.color_picker("三级标题颜色", colors["heading3"])
+            accent_color = st.color_picker("强调色", colors["accent"])
+            
+        with col2:
+            st.markdown("### 字体设置")
+            fonts = current_theme["fonts"]
+            heading_font = st.text_input("标题字体", fonts["heading"])
+            body_font = st.text_input("正文字体", fonts["body"])
+            
+            # 主题预览
+            st.markdown("### 主题预览")
+            preview_html = f"""
+            <div style="background-color: {background_color}; padding: 20px; border-radius: 10px; 
+                        font-family: {body_font}; color: {text_color};">
+                <h1 style="color: {heading1_color}; font-family: {heading_font};">一级标题</h1>
+                <h2 style="color: {heading2_color}; font-family: {heading_font};">二级标题</h2>
+                <h3 style="color: {heading3_color}; font-family: {heading_font};">三级标题</h3>
+                <p>这是一段预览文本，展示了正文字体和颜色的效果。您可以在这里看到主题的整体外观。</p>
+                <p style="color: {accent_color};"><strong>强调文本</strong>使用了强调色。</p>
+            </div>
+            """
+            st.markdown(preview_html, unsafe_allow_html=True)
+        
+        # 保存或创建新主题
+        new_theme_key = st.text_input("新主题标识符（用于代码中引用）", selected_theme if selected_theme else "my_theme")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("保存主题"):
+                # 创建新主题字典
+                new_theme = {
+                    "name": theme_name,
+                    "colors": {
+                        "background": background_color,
+                        "text": text_color,
+                        "heading1": heading1_color,
+                        "heading2": heading2_color,
+                        "heading3": heading3_color,
+                        "accent": accent_color
+                    },
+                    "fonts": {
+                        "heading": heading_font,
+                        "body": body_font
+                    }
+                }
                 
-                # 渲染为HTML，使用选定的主题
-                html_content = render_jinja2(markdown_content, selected_theme_key)
+                # 更新THEMES字典
+                THEMES[new_theme_key] = new_theme
                 
-                # 显示结果
-                st.success("演示文稿生成成功！")
+                # 显示成功消息
+                st.success(f"主题 '{theme_name}' 已保存!")
+                st.json(new_theme)  # 显示主题配置的JSON格式
                 
-                # 使用组件显示HTML
-                import streamlit.components.v1 as components
-                components.html(html_content, height=700, scrolling=True)
+        with col2:
+            if st.button("导出主题配置"):
+                # 创建主题配置的JSON
+                theme_config = {
+                    new_theme_key: {
+                        "name": theme_name,
+                        "colors": {
+                            "background": background_color,
+                            "text": text_color,
+                            "heading1": heading1_color,
+                            "heading2": heading2_color,
+                            "heading3": heading3_color,
+                            "accent": accent_color
+                        },
+                        "fonts": {
+                            "heading": heading_font,
+                            "body": body_font
+                        }
+                    }
+                }
                 
-                # 提供下载选项
+                # 提供下载
                 st.download_button(
-                    label="下载HTML文件",
-                    data=html_content,
-                    file_name="presentation.html",
-                    mime="text/html"
+                    label="下载主题配置",
+                    data=json.dumps(theme_config, indent=2, ensure_ascii=False),
+                    file_name=f"{new_theme_key}_theme.json",
+                    mime="application/json"
                 )
-                
-                # 提供PDF转换提示
-                st.info("提示：在演示文稿页面中，您可以点击右下角的“Save as PDF”按钮将演示文稿保存为PDF文件。")
-        else:
-            st.warning("请输入演示文稿主题和内容要求")
+
+        # 高级CSS编辑器
+        st.subheader("高级CSS编辑")
+        st.markdown("您可以在这里添加自定义CSS样式来进一步定制主题")
+        
+        # 默认CSS模板
+        default_css = f"""/* 自定义CSS样式 */
+.slide-content {{
+  /* 添加您的自定义样式 */
+}}
+
+h1 {{
+  /* 一级标题样式 */
+}}
+
+h2 {{
+  /* 二级标题样式 */
+}}
+
+h3 {{
+  /* 三级标题样式 */
+}}
+
+.chunk-paragraph {{
+  /* 段落样式 */
+}}"""
+        
+        custom_css = st.text_area("自定义CSS", default_css, height=300)
+        
+        if st.button("预览自定义CSS效果"):
+            st.info("自定义CSS功能将在渲染时应用到演示文稿中")
+            st.code(custom_css, language="css")
 
 
 if __name__ == "__main__":
